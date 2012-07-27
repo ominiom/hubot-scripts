@@ -26,6 +26,9 @@ module.exports = (robot) ->
     if shotgun.loaded(user)
       return msg.reply "You are already #{ordinalize shotgun.place(user)}"
 
+    if shotgun.whois(place)
+      return msg.reply "#{shotgun.whois place} is already #{ordinalize place}!"
+
     if not shotgun.hardcore and place isnt shotgun.next
       return msg.reply "Don't you mean #{shotgun.next_place()}?"
 
