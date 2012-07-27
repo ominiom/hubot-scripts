@@ -5,7 +5,9 @@
 #   None
 #
 # Configuration:
-#   None
+#   HUBOT_SHOTGUN_HARDCORE - Disables:
+#     Seeing who has each position
+#     Only being able to call the next position
 #
 # Commands:
 #   hubot shotgun <place> - Make a call for that place (numbers only - e.g. 1st, 2nd...)
@@ -22,24 +24,28 @@ module.exports = (robot) ->
     user  = msg.message.user.name
     
     if shotgun.loaded(user)
-      return msg.send "You are already #{ordinalize shotgun.place(user)}"
+      return msg.reply "You are already #{ordinalize shotgun.place(user)}"
 
-    if place is shotgun.next()
-      shotgun.load user
+    if not shotgun.hardcore and place isnt shotgun.next
+      return msg.reply "Don't you mean #{shotgun.next_place()}?"
+
+    if place is shotgun.next or shotgun.hardcore
+      shotgun.load user, place
+    
+    if shotgun.loaded(user)
       msg.send "#{user} has called #{ordinalize(place)}"
-    else
-      msg.send "Don't you mean #{shotgun.next_place()}?"
   
-  robot.respond /shotgun next$/i, (msg) ->
-    msg.send "You'll want to call #{shotgun.next_place()}"
+  unless shotgun.hardcore
+    robot.respond /shotgun next$/i, (msg) ->
+      msg.reply "You'll want to call #{shotgun.next_place()}"
+
+    robot.respond /shotgun (show|inspect)$/i, (msg) ->
+      msg.send (if shotgun.loaded() then shotgun.inspect() else 'Shotgun is empty!')
 
   robot.respond /shotgun (reload|fire|empty|reset)$/i, (msg) ->
     msg.send shotgun.inspect()
     shotgun.reload()
     msg.send "Shotgun is now armed!"
-
-  robot.respond /shotgun (show|inspect)$/i, (msg) ->
-    msg.send (if shotgun.loaded() then shotgun.inspect() else 'Shotgun is empty!')
 
 ordinalize = (number) ->
   ordinal =
@@ -55,27 +61,32 @@ class Shotgun
     @reload()
 
   reload: ->
-    @magazine = [] 
+    @magazine = {}
+    @next = 1
 
   loaded: (user) ->
     if user
-      user in @magazine
+      user of @magazine
     else
-      @magazine.length isnt 0
+      @magazine isnt {}
 
   place: (user) ->
-    1 + @magazine.indexOf user
+    @magazine[user]
 
-  load: (user) ->
-    @magazine.push user
+  whois: (n) ->
+    return user if place is n for user, place of @magazine 
 
-  next: ->
-    @magazine.length + 1
+  load: (user, place) ->
+    @magazine[user] = place
+    @next++ if place >= @next
 
   inspect: ->
-    ("#{ordinalize(place + 1)} - #{user}") for user, place in @magazine
+    places = (place for user, place of @magazine).sort()
+
+    ("#{ordinalize(place)} - #{@whois(place) or 'No-one'}") for place in places
 
   next_place: ->
-    ordinalize @next()
+    ordinalize @next
 
 shotgun = new Shotgun
+shotgun.hardcore = process.env.HUBOT_SHOTGUN_HARDCORE
